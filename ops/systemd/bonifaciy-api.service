@@ -1,0 +1,18 @@
+[Unit]
+Description=Bonifaciy API service
+After=network.target
+
+[Service]
+Type=simple
+User=bonifaciy
+Group=bonifaciy
+WorkingDirectory=/opt/bonifaciy/current
+EnvironmentFile=/etc/bonifaciy/bonifaciy.env
+ExecStart=/usr/bin/python /opt/bonifaciy/current/main.py api-server --host 127.0.0.1 --port 8080
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
