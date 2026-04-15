@@ -1,0 +1,18 @@
+Bonifaciy Windows service setup (NSSM)
+
+1) Install NSSM and open elevated PowerShell/CMD.
+2) API service:
+   nssm install BonifaciyApi "C:\Python311\python.exe" "C:\bonifaciy\current\main.py" api-server --host 127.0.0.1 --port 8080
+   nssm set BonifaciyApi AppDirectory "C:\bonifaciy\current"
+   nssm set BonifaciyApi AppEnvironmentExtra BONIFACIY_DATA_DIR=C:\bonifaciy\data BONIFACIY_SECRET_BACKEND=fernet BONIFACIY_SECRET_KEY=... BONIFACIY_API_SIGNING_KEY=... BONIFACIY_ENV=production BONIFACIY_ALLOW_INSECURE_SECRETS=0
+   nssm set BonifaciyApi Start SERVICE_AUTO_START
+
+3) Mail worker service:
+   nssm install BonifaciyMailWorker "C:\Python311\python.exe" "C:\bonifaciy\current\main.py" mail-worker-daemon --batch-size 20 --interval 15 --role mto
+   nssm set BonifaciyMailWorker AppDirectory "C:\bonifaciy\current"
+   nssm set BonifaciyMailWorker AppEnvironmentExtra BONIFACIY_DATA_DIR=C:\bonifaciy\data BONIFACIY_SECRET_BACKEND=fernet BONIFACIY_SECRET_KEY=... BONIFACIY_API_SIGNING_KEY=... BONIFACIY_ENV=production BONIFACIY_ALLOW_INSECURE_SECRETS=0
+   nssm set BonifaciyMailWorker Start SERVICE_AUTO_START
+
+4) Start services:
+   nssm start BonifaciyApi
+   nssm start BonifaciyMailWorker

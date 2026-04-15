@@ -1,0 +1,18 @@
+[Unit]
+Description=Bonifaciy mail worker daemon
+After=network.target
+
+[Service]
+Type=simple
+User=bonifaciy
+Group=bonifaciy
+WorkingDirectory=/opt/bonifaciy/current
+EnvironmentFile=/etc/bonifaciy/bonifaciy.env
+ExecStart=/usr/bin/python /opt/bonifaciy/current/main.py mail-worker-daemon --batch-size 20 --interval 15 --role mto
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
