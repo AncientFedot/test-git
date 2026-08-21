@@ -29,15 +29,15 @@ jobs:
           gradle-version: '8.9'
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Apply V3 source patch
+      - name: Apply V3B source patch
         working-directory: mobile-src
         run: python patch_v3_source.py
       - name: Build debug APK
         working-directory: mobile-src
         run: gradle assembleDebug
       - name: Rename APK
-        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3-PUSH-TEST.apk
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3B-PUSH-TEST.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: BonifaciyChat-V3-PUSH-TEST
-          path: BonifaciyChat-V3-PUSH-TEST.apk
+          name: BonifaciyChat-V3B-PUSH-TEST
+          path: BonifaciyChat-V3B-PUSH-TEST.apk
