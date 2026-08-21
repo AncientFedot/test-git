@@ -3,6 +3,8 @@ name: Build Bonifaciy Chat APK
 on:
   push:
     branches: [ "bonifaciy-chat-apk-build-v1" ]
+  pull_request:
+    branches: [ "master" ]
   workflow_dispatch:
 
 jobs:
