@@ -10,11 +10,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Firebase Android client identifiers are public app configuration, not
+    # Firebase Admin/server credentials. Never place a service-account key here.
     env:
-      BONI_FIREBASE_APP_ID: ${{ secrets.BONI_FIREBASE_APP_ID }}
-      BONI_FIREBASE_API_KEY: ${{ secrets.BONI_FIREBASE_API_KEY }}
-      BONI_FIREBASE_PROJECT_ID: ${{ secrets.BONI_FIREBASE_PROJECT_ID }}
-      BONI_FIREBASE_SENDER_ID: ${{ secrets.BONI_FIREBASE_SENDER_ID }}
+      BONI_FIREBASE_APP_ID: "1:376053286880:android:74ed820e06563c3d228d85"
+      BONI_FIREBASE_API_KEY: "AIzaSyBMSdgXvo6VQjKKdK_1iR8jy0f98cOa9AI"
+      BONI_FIREBASE_PROJECT_ID: "bonifaciy-chat"
+      BONI_FIREBASE_SENDER_ID: "376053286880"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
