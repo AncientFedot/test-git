@@ -30,6 +30,12 @@ anchor = '''    private int dp(int v) {\n'''
 insert = '''    private void openPendingPushChatIfAny() {\n        try {\n            String pending = getSharedPreferences("boni", MODE_PRIVATE)\n                    .getString("pending_push_chat_url", "");\n            if (pending == null || pending.isBlank() || base == null) return;\n\n            Uri uri;\n            if (pending.startsWith("/chat")) {\n                uri = Uri.parse(base + pending);\n            } else {\n                uri = Uri.parse(pending);\n                if (!isTrustedPortalUri(uri)) return;\n                Uri baseUri = Uri.parse(base);\n                if (baseUri.getHost() == null || uri.getHost() == null\n                        || !baseUri.getHost().equalsIgnoreCase(uri.getHost())) return;\n            }\n            String path = uri.getPath();\n            if (path == null || !path.startsWith("/chat")) return;\n\n            getSharedPreferences("boni", MODE_PRIVATE).edit()\n                    .remove("pending_push_chat_url")\n                    .remove("pending_push_chat_id")\n                    .apply();\n            web.loadUrl(uri.toString());\n        } catch (Exception ignored) {\n        }\n    }\n\n'''
 replace_once(anchor, insert + anchor, 'pending-push-method')
 
+replace_once(
+    '''            public void onPageFinished(WebView v, String url) {\n                injectMobile();\n            }''',
+    '''            public void onPageFinished(WebView v, String url) {\n                injectMobile();\n                PushRegistrar.scheduleRegistration(MainActivity.this, 250L, 2000L);\n            }''',
+    'register-after-page-load',
+)
+
 pattern = re.compile(
     r'    private void showMessageNotification\(String author\) \{.*?\n    \}\n\n    private void injectMobile\(\) \{',
     re.S,
@@ -48,7 +54,7 @@ replace_once(
 
 replace_once(
     '''        public void notifyNewMessage(String author, String messageId) {\n            if (!appInForeground) runOnUiThread(() -> showMessageNotification(author));\n        }''',
-    '''        public void notifyNewMessage(String author, String chatTitle, String preview, String messageId) {\n            if (!appInForeground) {\n                runOnUiThread(() -> showMessageNotification(author, chatTitle, preview, messageId));\n            }\n        }''',
+    '''        public void notifyNewMessage(String author, String chatTitle, String preview, String messageId) {\n            // With FCM configured the server push is authoritative. This local\n            // WebView fallback is used only when Firebase is unavailable,\n            // preventing duplicate notifications while the app is backgrounded.\n            if (!appInForeground && !BonifaciyApp.isFirebaseConfigured()) {\n                runOnUiThread(() -> showMessageNotification(author, chatTitle, preview, messageId));\n            }\n        }''',
     'rich-local-notification-bridge',
 )
 
