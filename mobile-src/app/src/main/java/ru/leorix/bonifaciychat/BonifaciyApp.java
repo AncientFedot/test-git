@@ -18,6 +18,7 @@ public class BonifaciyApp extends Application {
 
         if (firebaseConfigured) {
             PushRegistrar.scheduleRegistration(this, 1500L, 7000L, 20000L, 60000L);
+            PushRegistrar.startPeriodic(this);
             registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
                 @Override public void onActivityCreated(Activity activity, Bundle state) {}
                 @Override public void onActivityStarted(Activity activity) {}
