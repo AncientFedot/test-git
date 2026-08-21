@@ -2,7 +2,7 @@ name: Build Bonifaciy Chat APK
 
 on:
   push:
-    branches: [ "bonifaciy-chat-apk-build-v1" ]
+    branches: [ "bonifaciy-chat-apk-build-v1", "bonifaciy-chat-apk-v2-test" ]
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:
@@ -26,8 +26,8 @@ jobs:
         working-directory: mobile-src
         run: gradle assembleDebug
       - name: Rename APK
-        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V1-TEST.apk
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V2-TEST.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: BonifaciyChat-V1-TEST
-          path: BonifaciyChat-V1-TEST.apk
+          name: BonifaciyChat-V2-TEST
+          path: BonifaciyChat-V2-TEST.apk
