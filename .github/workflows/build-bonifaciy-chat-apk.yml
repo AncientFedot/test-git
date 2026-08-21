@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Publish V3C run locator
+      - name: Publish V3D run locator
         if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
         shell: bash
         run: |
@@ -28,12 +28,12 @@ jobs:
             echo "RUN_ID=${GITHUB_RUN_ID}"
             echo "HEAD_SHA=${GITHUB_SHA}"
             echo "STATE=STARTED"
-          } > mobile-src/V3C_RUN_LOCATOR.txt
+          } > mobile-src/V3D_RUN_LOCATOR.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mobile-src/V3C_RUN_LOCATOR.txt
+          git add mobile-src/V3D_RUN_LOCATOR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "V3C run locator [skip ci]"
+            git commit -m "V3D run locator [skip ci]"
             git push origin HEAD:bonifaciy-chat-apk-v3-push-test
           fi
 
@@ -54,9 +54,30 @@ jobs:
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Apply V3C source patch
+
+      - name: Apply V3C base source patch
         working-directory: mobile-src
         run: python patch_v3_source.py
+
+      - name: Apply V3D protocol compatibility fix
+        working-directory: mobile-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/ru/leorix/bonifaciychat/PushRegistrar.java')
+          s = p.read_text(encoding='utf-8')
+          if s.count('"android-v3c"') != 2:
+              raise SystemExit(f'Expected exactly 2 android-v3c protocol headers, found {s.count(chr(34)+"android-v3c"+chr(34))}')
+          s = s.replace('"android-v3c"', '"android-v3"')
+          s = s.replace('BonifaciyChatAndroid/3.2', 'BonifaciyChatAndroid/3.3')
+          s = s.replace('V3C native diagnostics', 'V3D native diagnostics')
+          s = s.replace('return "3.2-test";', 'return "3.3-test";')
+          p.write_text(s, encoding='utf-8')
+          print('V3D protocol fix OK: android-v3')
+          PY
+
       - name: Build debug APK
         working-directory: mobile-src
         run: gradle assembleDebug
@@ -67,20 +88,21 @@ jobs:
           set -euo pipefail
           APK="mobile-src/app/build/outputs/apk/debug/app-debug.apk"
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          "$APKSIGNER" verify --print-certs "$APK" > /tmp/v3c-apksigner.txt
-          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3c-apksigner.txt | sed -n '1p')"
+          "$APKSIGNER" verify --print-certs "$APK" > /tmp/v3d-apksigner.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3d-apksigner.txt | sed -n '1p')"
           test -n "$DIGEST"
-          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3C_SIGNING_SHA256.txt
-          cat V3C_SIGNING_SHA256.txt
+          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3D_SIGNING_SHA256.txt
+          cat V3D_SIGNING_SHA256.txt
 
       - name: Rename APK
-        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3C-PUSH-DIAG-TEST.apk
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3D-PUSH-DIAG-TEST.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: BonifaciyChat-V3C-PUSH-DIAG-TEST
+          name: BonifaciyChat-V3D-PUSH-DIAG-TEST
           path: |
-            BonifaciyChat-V3C-PUSH-DIAG-TEST.apk
-            V3C_SIGNING_SHA256.txt
+            BonifaciyChat-V3D-PUSH-DIAG-TEST.apk
+            V3D_SIGNING_SHA256.txt
 
       - name: Publish non-secret build metadata
         if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
@@ -91,10 +113,10 @@ jobs:
             echo "RUN_ID=${GITHUB_RUN_ID}"
             echo "HEAD_SHA=${GITHUB_SHA}"
             echo "STATE=SUCCESS"
-            cat V3C_SIGNING_SHA256.txt
-          } > mobile-src/V3C_BUILD_META.txt
-          git add mobile-src/V3C_BUILD_META.txt mobile-src/V3C_RUN_LOCATOR.txt
+            cat V3D_SIGNING_SHA256.txt
+          } > mobile-src/V3D_BUILD_META.txt
+          git add mobile-src/V3D_BUILD_META.txt mobile-src/V3D_RUN_LOCATOR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "V3C build metadata [skip ci]"
+            git commit -m "V3D build metadata [skip ci]"
             git push origin HEAD:bonifaciy-chat-apk-v3-push-test
           fi
