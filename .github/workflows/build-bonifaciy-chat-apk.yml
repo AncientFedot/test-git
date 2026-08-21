@@ -65,10 +65,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey \
-            | awk '/SHA256:/{print "CERT_SHA256=" $2; exit}' \
-            | tee V3C_SIGNING_SHA256.txt
-          test -s V3C_SIGNING_SHA256.txt
+          APK="mobile-src/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs "$APK" > /tmp/v3c-apksigner.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3c-apksigner.txt | sed -n '1p')"
+          test -n "$DIGEST"
+          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3C_SIGNING_SHA256.txt
+          cat V3C_SIGNING_SHA256.txt
 
       - name: Rename APK
         run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3C-PUSH-DIAG-TEST.apk
@@ -91,5 +94,7 @@ jobs:
             cat V3C_SIGNING_SHA256.txt
           } > mobile-src/V3C_BUILD_META.txt
           git add mobile-src/V3C_BUILD_META.txt mobile-src/V3C_RUN_LOCATOR.txt
-          git commit -m "V3C build metadata [skip ci]"
-          git push origin HEAD:bonifaciy-chat-apk-v3-push-test
+          if ! git diff --cached --quiet; then
+            git commit -m "V3C build metadata [skip ci]"
+            git push origin HEAD:bonifaciy-chat-apk-v3-push-test
+          fi
