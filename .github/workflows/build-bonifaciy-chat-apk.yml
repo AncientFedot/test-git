@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Publish V3D run locator
+      - name: Publish V3E run locator
         if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
         shell: bash
         run: |
@@ -28,12 +28,12 @@ jobs:
             echo "RUN_ID=${GITHUB_RUN_ID}"
             echo "HEAD_SHA=${GITHUB_SHA}"
             echo "STATE=STARTED"
-          } > mobile-src/V3D_RUN_LOCATOR.txt
+          } > mobile-src/V3E_RUN_LOCATOR.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mobile-src/V3D_RUN_LOCATOR.txt
+          git add mobile-src/V3E_RUN_LOCATOR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "V3D run locator [skip ci]"
+            git commit -m "V3E run locator [skip ci]"
             git push origin HEAD:bonifaciy-chat-apk-v3-push-test
           fi
 
@@ -46,20 +46,41 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Restore persistent TEST signing key
+      - name: Restore persistent Bonifaciy TEST signing key
+        id: signing-cache
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: bonifaciy-chat-v3c-test-signing-v1
+          path: mobile-src/bonifaciy-test-debug.keystore
+          key: bonifaciy-chat-test-debug-signing-v2
+
+      - name: Create TEST signing key on first build
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="mobile-src/bonifaciy-test-debug.keystore"
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair \
+              -keystore "$KEYSTORE" \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Bonifaciy Chat TEST,O=LEORIX,C=RU" \
+              -noprompt
+          fi
+          test -s "$KEYSTORE"
+          echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Apply V3C base source patch
+      - name: Apply V3C mobile UI and native diagnostics base
         working-directory: mobile-src
         run: python patch_v3_source.py
 
-      - name: Apply V3D protocol compatibility fix
+      - name: Apply V3E push protocol compatibility fix
         working-directory: mobile-src
         shell: bash
         run: |
@@ -68,43 +89,44 @@ jobs:
           from pathlib import Path
           p = Path('app/src/main/java/ru/leorix/bonifaciychat/PushRegistrar.java')
           s = p.read_text(encoding='utf-8')
-          if s.count('"android-v3c"') != 2:
-              raise SystemExit(f'Expected exactly 2 android-v3c protocol headers, found {s.count(chr(34)+"android-v3c"+chr(34))}')
+          count = s.count('"android-v3c"')
+          if count != 2:
+              raise SystemExit(f'Expected exactly 2 android-v3c protocol headers, found {count}')
           s = s.replace('"android-v3c"', '"android-v3"')
-          s = s.replace('BonifaciyChatAndroid/3.2', 'BonifaciyChatAndroid/3.3')
-          s = s.replace('V3C native diagnostics', 'V3D native diagnostics')
-          s = s.replace('return "3.2-test";', 'return "3.3-test";')
+          s = s.replace('BonifaciyChatAndroid/3.2', 'BonifaciyChatAndroid/3.4')
+          s = s.replace('V3C native diagnostics', 'V3E native diagnostics')
+          s = s.replace('return "3.2-test";', 'return "3.4-test";')
           p.write_text(s, encoding='utf-8')
-          print('V3D protocol fix OK: android-v3')
+          print('V3E protocol fix OK: X-Bonifaciy-Mobile-App=android-v3')
           PY
 
-      - name: Build debug APK
+      - name: Build debug APK with persistent TEST signing identity
         working-directory: mobile-src
         run: gradle assembleDebug
 
-      - name: Record TEST signing certificate fingerprint
+      - name: Verify APK and record TEST signing fingerprint
         shell: bash
         run: |
           set -euo pipefail
           APK="mobile-src/app/build/outputs/apk/debug/app-debug.apk"
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          "$APKSIGNER" verify --print-certs "$APK" > /tmp/v3d-apksigner.txt
-          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3d-apksigner.txt | sed -n '1p')"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v3e-apksigner.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3e-apksigner.txt | sed -n '1p')"
           test -n "$DIGEST"
-          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3D_SIGNING_SHA256.txt
-          cat V3D_SIGNING_SHA256.txt
+          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3E_SIGNING_SHA256.txt
+          cat V3E_SIGNING_SHA256.txt
 
       - name: Rename APK
-        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3D-PUSH-DIAG-TEST.apk
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3E-PUSH-DIAG-TEST.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BonifaciyChat-V3D-PUSH-DIAG-TEST
+          name: BonifaciyChat-V3E-PUSH-DIAG-TEST
           path: |
-            BonifaciyChat-V3D-PUSH-DIAG-TEST.apk
-            V3D_SIGNING_SHA256.txt
+            BonifaciyChat-V3E-PUSH-DIAG-TEST.apk
+            V3E_SIGNING_SHA256.txt
 
-      - name: Publish non-secret build metadata
+      - name: Publish non-secret V3E build metadata
         if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
         shell: bash
         run: |
@@ -113,10 +135,11 @@ jobs:
             echo "RUN_ID=${GITHUB_RUN_ID}"
             echo "HEAD_SHA=${GITHUB_SHA}"
             echo "STATE=SUCCESS"
-            cat V3D_SIGNING_SHA256.txt
-          } > mobile-src/V3D_BUILD_META.txt
-          git add mobile-src/V3D_BUILD_META.txt mobile-src/V3D_RUN_LOCATOR.txt
+            echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
+            cat V3E_SIGNING_SHA256.txt
+          } > mobile-src/V3E_BUILD_META.txt
+          git add mobile-src/V3E_BUILD_META.txt mobile-src/V3E_RUN_LOCATOR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "V3D build metadata [skip ci]"
+            git commit -m "V3E build metadata [skip ci]"
             git push origin HEAD:bonifaciy-chat-apk-v3-push-test
           fi
