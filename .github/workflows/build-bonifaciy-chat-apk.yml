@@ -11,8 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Firebase Android client identifiers are public app configuration, not
-    # Firebase Admin/server credentials. Never place a service-account key here.
     env:
       BONI_FIREBASE_APP_ID: "1:376053286880:android:74ed820e06563c3d228d85"
       BONI_FIREBASE_API_KEY: "AIzaSyBMSdgXvo6VQjKKdK_1iR8jy0f98cOa9AI"
@@ -20,6 +18,25 @@ jobs:
       BONI_FIREBASE_SENDER_ID: "376053286880"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Publish V3C run locator
+        if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "RUN_ID=${GITHUB_RUN_ID}"
+            echo "HEAD_SHA=${GITHUB_SHA}"
+            echo "STATE=STARTED"
+          } > mobile-src/V3C_RUN_LOCATOR.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile-src/V3C_RUN_LOCATOR.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "V3C run locator [skip ci]"
+            git push origin HEAD:bonifaciy-chat-apk-v3-push-test
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,8 +46,6 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      # V3C establishes one persistent TEST signing identity for subsequent
-      # builds without committing the private key to this public repository.
       - name: Restore persistent TEST signing key
         uses: actions/cache@v4
         with:
@@ -72,12 +87,9 @@ jobs:
           {
             echo "RUN_ID=${GITHUB_RUN_ID}"
             echo "HEAD_SHA=${GITHUB_SHA}"
+            echo "STATE=SUCCESS"
             cat V3C_SIGNING_SHA256.txt
           } > mobile-src/V3C_BUILD_META.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mobile-src/V3C_BUILD_META.txt
-          if ! git diff --cached --quiet; then
-            git commit -m "V3C build metadata [skip ci]"
-            git push origin HEAD:bonifaciy-chat-apk-v3-push-test
-          fi
+          git add mobile-src/V3C_BUILD_META.txt mobile-src/V3C_RUN_LOCATOR.txt
+          git commit -m "V3C build metadata [skip ci]"
+          git push origin HEAD:bonifaciy-chat-apk-v3-push-test
