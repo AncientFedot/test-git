@@ -26,7 +26,7 @@ def replace_n(old: str, new: str, expected: int, name: str) -> None:
 
 replace_once(
     's.setUserAgentString(s.getUserAgentString() + " BonifaciyChatAndroid/2.0");',
-    's.setUserAgentString(s.getUserAgentString() + " BonifaciyChatAndroid/3.1");',
+    's.setUserAgentString(s.getUserAgentString() + " BonifaciyChatAndroid/3.2");',
     'user-agent',
 )
 replace_once('b.setTextSize(21);', 'b.setTextSize(18);', 'native-bar-button-font')
@@ -105,12 +105,11 @@ pattern = re.compile(
 replacement = '''    private void showMessageNotification(String author, String chatTitle, String preview, String messageId) {
         if (appInForeground) return;
         String companyKey = "НПО БОРЕЙ".equals(companyName) ? "borey" : "rk";
-        String chatId = "local:" + (chatTitle == null ? "chat" : chatTitle);
         NotificationHelper.showMessage(
                 this,
                 companyKey,
                 companyName,
-                chatId,
+                messageId == null || messageId.isBlank() ? "local:" + (chatTitle == null ? "chat" : chatTitle) : "msg:" + messageId,
                 chatTitle,
                 author,
                 preview,
@@ -126,7 +125,6 @@ if count != 1:
     raise SystemExit(f'rich-local-notification-method: expected 1 replacement, found {count}')
 checks.append('rich-local-notification-method')
 
-# Add compact V3B overrides after the older mobile rules. Later CSS wins.
 css_anchor = '''
 
         String js = "document.body.classList.add('boniapp');" +
@@ -177,39 +175,38 @@ replace_once(
 diag_anchor = '''    private void openNotificationSettings() {
 '''
 diag_method = '''    private void showPushDiagnostics() {
-        String js = "(function(){fetch('/api/mobile/push/status',{credentials:'same-origin',cache:'no-store'})"
-                + ".then(async function(r){var t=await r.text();var j={};try{j=JSON.parse(t)}catch(e){};"
-                + "var msg='HTTP: '+r.status+'\\nКомпания: '+(j.company_key||'?')+'\\nУстройств: '+(j.registered_devices===undefined?'?':j.registered_devices)+'\\nFirebase key: '+(j.firebase_key_present?'OK':'NO');"
-                + "if(window.BonifaciyAndroid)window.BonifaciyAndroid.showDiagnostic(msg);})"
-                + ".catch(function(e){if(window.BonifaciyAndroid)window.BonifaciyAndroid.showDiagnostic('Ошибка: '+e);});})()";
-        web.evaluateJavascript(js, null);
+        final AlertDialog waiting = new AlertDialog.Builder(this)
+                .setTitle("Диагностика push")
+                .setMessage("Проверяю Firebase, FCM и регистрацию на сервере…")
+                .setCancelable(false)
+                .create();
+        waiting.show();
+        PushRegistrar.collectDiagnostics(this, report -> {
+            try { waiting.dismiss(); } catch (Exception ignored) {}
+            if (isFinishing()) return;
+            new AlertDialog.Builder(this)
+                    .setTitle("Диагностика push")
+                    .setMessage(report == null || report.isBlank() ? "Нет данных" : report)
+                    .setPositiveButton("OK", null)
+                    .show();
+        });
     }
 
 '''
-replace_once(diag_anchor, diag_method + diag_anchor, 'push-diagnostics-method')
+replace_once(diag_anchor, diag_method + diag_anchor, 'native-push-diagnostics-method')
 
 replace_once(
     '''        public void notifyNewMessage(String author, String messageId) {
             if (!appInForeground) runOnUiThread(() -> showMessageNotification(author));
         }''',
     '''        public void notifyNewMessage(String author, String chatTitle, String preview, String messageId) {
-            // Always keep the WebView background fallback. NotificationHelper
-            // deduplicates it against FCM using company + message id.
+            // Keep the V2-style background fallback while FCM is being validated.
             if (!appInForeground) {
                 runOnUiThread(() -> showMessageNotification(author, chatTitle, preview, messageId));
             }
-        }
-
-        @JavascriptInterface
-        public void showDiagnostic(String value) {
-            runOnUiThread(() -> new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("Диагностика push")
-                    .setMessage(value == null ? "Нет данных" : value)
-                    .setPositiveButton("OK", null)
-                    .show());
         }''',
-    'rich-local-notification-bridge-and-diagnostics',
+    'rich-local-notification-bridge',
 )
 
 path.write_text(text, encoding='utf-8')
-print('V3B source patch OK:', ', '.join(checks))
+print('V3C source patch OK:', ', '.join(checks))
