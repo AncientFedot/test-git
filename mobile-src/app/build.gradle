@@ -1,15 +1,36 @@
 plugins { id 'com.android.application' }
 
+def envOrProp = { String name ->
+    def value = System.getenv(name)
+    if (value == null || value.trim().isEmpty()) value = project.findProperty(name)
+    return value == null ? '' : value.toString()
+}
+
+def quoted = { String value ->
+    '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+
 android {
     namespace 'ru.leorix.bonifaciychat'
     compileSdk 35
+
     defaultConfig {
         applicationId 'ru.leorix.bonifaciychat'
         minSdk 26
         targetSdk 35
-        versionCode 2
-        versionName '2.0-test'
+        versionCode 3
+        versionName '3.0-test'
+
+        buildConfigField 'String', 'FIREBASE_APP_ID', quoted(envOrProp('BONI_FIREBASE_APP_ID'))
+        buildConfigField 'String', 'FIREBASE_API_KEY', quoted(envOrProp('BONI_FIREBASE_API_KEY'))
+        buildConfigField 'String', 'FIREBASE_PROJECT_ID', quoted(envOrProp('BONI_FIREBASE_PROJECT_ID'))
+        buildConfigField 'String', 'FIREBASE_SENDER_ID', quoted(envOrProp('BONI_FIREBASE_SENDER_ID'))
     }
+
+    buildFeatures {
+        buildConfig true
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix '.test'
@@ -20,8 +41,15 @@ android {
             shrinkResources false
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    implementation platform('com.google.firebase:firebase-bom:34.17.0')
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-installations'
 }
