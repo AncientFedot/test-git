@@ -29,6 +29,9 @@ jobs:
           gradle-version: '8.9'
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Apply V3 source patch
+        working-directory: mobile-src
+        run: python patch_v3_source.py
       - name: Build debug APK
         working-directory: mobile-src
         run: gradle assembleDebug
