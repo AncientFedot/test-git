@@ -7,6 +7,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
@@ -14,6 +15,7 @@ import java.util.Locale;
 
 public final class NotificationHelper {
     public static final String CHANNEL_MESSAGES = "bonifaciy_chat_messages";
+    private static final long DEDUPE_WINDOW_MS = 90_000L;
     private NotificationHelper() {}
 
     public static void ensureChannel(Context context) {
@@ -45,6 +47,7 @@ public final class NotificationHelper {
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
+        if (!claimMessageOnce(context, companyKey, messageId)) return;
 
         ensureChannel(context);
         String cleanSender = clean(sender, 80);
@@ -115,6 +118,18 @@ public final class NotificationHelper {
 
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         nm.notify(notificationId, builder.build());
+    }
+
+    private static boolean claimMessageOnce(Context context, String companyKey, String messageId) {
+        String id = messageId == null ? "" : messageId.trim();
+        if (id.isEmpty()) return true;
+        String key = safeCompanyKey(companyKey) + "|" + id;
+        SharedPreferences p = context.getSharedPreferences("boni_notify_dedupe", Context.MODE_PRIVATE);
+        long now = System.currentTimeMillis();
+        long last = p.getLong(key, 0L);
+        if (last > 0L && now - last < DEDUPE_WINDOW_MS) return false;
+        p.edit().putLong(key, now).apply();
+        return true;
     }
 
     private static String cleanPreview(String value) {
