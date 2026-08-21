@@ -22,16 +22,11 @@ jobs:
           gradle-version: '8.9'
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Unpack Android project
-        run: |
-          rm -rf mobile-build
-          mkdir mobile-build
-          unzip -q mobile/BONIFACIY_CHAT_ANDROID_V1_TEST_SOURCE.zip -d mobile-build
       - name: Build debug APK
-        working-directory: mobile-build/BonifaciyChat_Android_V1
+        working-directory: mobile-src
         run: gradle assembleDebug
       - name: Rename APK
-        run: cp mobile-build/BonifaciyChat_Android_V1/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V1-TEST.apk
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V1-TEST.apk
       - uses: actions/upload-artifact@v4
         with:
           name: BonifaciyChat-V1-TEST
