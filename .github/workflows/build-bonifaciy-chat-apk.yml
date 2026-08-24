@@ -108,6 +108,10 @@ jobs:
         working-directory: mobile-src
         run: python patch_v3g_chat_navigation_shell.py
 
+      - name: Fix V3G Java regex escape
+        working-directory: mobile-src
+        run: python patch_v3g_compile_escape_fix.py
+
       - name: Build debug APK with persistent TEST signing identity
         working-directory: mobile-src
         run: gradle assembleDebug
