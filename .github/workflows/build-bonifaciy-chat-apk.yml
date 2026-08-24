@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Publish V3F run locator
+      - name: Publish V3G run locator
         if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
         shell: bash
         run: |
@@ -28,12 +28,12 @@ jobs:
             echo "RUN_ID=${GITHUB_RUN_ID}"
             echo "HEAD_SHA=${GITHUB_SHA}"
             echo "STATE=STARTED"
-          } > mobile-src/V3F_RUN_LOCATOR.txt
+          } > mobile-src/V3G_RUN_LOCATOR.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mobile-src/V3F_RUN_LOCATOR.txt
+          git add mobile-src/V3G_RUN_LOCATOR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "V3F run locator [skip ci]"
+            git commit -m "V3G run locator [skip ci]"
             git push origin HEAD:bonifaciy-chat-apk-v3-push-test
           fi
 
@@ -104,6 +104,10 @@ jobs:
         working-directory: mobile-src
         run: python patch_v3f_push_post_headers.py
 
+      - name: Apply V3G exact chat navigation and mobile shell
+        working-directory: mobile-src
+        run: python patch_v3g_chat_navigation_shell.py
+
       - name: Build debug APK with persistent TEST signing identity
         working-directory: mobile-src
         run: gradle assembleDebug
@@ -114,23 +118,23 @@ jobs:
           set -euo pipefail
           APK="mobile-src/app/build/outputs/apk/debug/app-debug.apk"
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v3f-apksigner.txt
-          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3f-apksigner.txt | sed -n '1p')"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v3g-apksigner.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3g-apksigner.txt | sed -n '1p')"
           test -n "$DIGEST"
-          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3F_SIGNING_SHA256.txt
-          cat V3F_SIGNING_SHA256.txt
+          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3G_SIGNING_SHA256.txt
+          cat V3G_SIGNING_SHA256.txt
 
       - name: Rename APK
-        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3F-PUSH-DIAG-TEST.apk
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3G-CHAT-UX-PUSH-TEST.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BonifaciyChat-V3F-PUSH-DIAG-TEST
+          name: BonifaciyChat-V3G-CHAT-UX-PUSH-TEST
           path: |
-            BonifaciyChat-V3F-PUSH-DIAG-TEST.apk
-            V3F_SIGNING_SHA256.txt
+            BonifaciyChat-V3G-CHAT-UX-PUSH-TEST.apk
+            V3G_SIGNING_SHA256.txt
 
-      - name: Publish non-secret V3F build metadata
+      - name: Publish non-secret V3G build metadata
         if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
         shell: bash
         run: |
@@ -140,10 +144,10 @@ jobs:
             echo "HEAD_SHA=${GITHUB_SHA}"
             echo "STATE=SUCCESS"
             echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
-            cat V3F_SIGNING_SHA256.txt
-          } > mobile-src/V3F_BUILD_META.txt
-          git add mobile-src/V3F_BUILD_META.txt mobile-src/V3F_RUN_LOCATOR.txt
+            cat V3G_SIGNING_SHA256.txt
+          } > mobile-src/V3G_BUILD_META.txt
+          git add mobile-src/V3G_BUILD_META.txt mobile-src/V3G_RUN_LOCATOR.txt
           if ! git diff --cached --quiet; then
-            git commit -m "V3F build metadata [skip ci]"
+            git commit -m "V3G build metadata [skip ci]"
             git push origin HEAD:bonifaciy-chat-apk-v3-push-test
           fi
