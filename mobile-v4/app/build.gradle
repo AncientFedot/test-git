@@ -16,8 +16,8 @@ android {
         applicationId 'ru.leorix.bonifaciychat'
         minSdk 26
         targetSdk 36
-        versionCode 20
-        versionName '4.0a-native-internal'
+        versionCode 21
+        versionName '4.0b-native-internal'
 
         buildConfigField 'String', 'FIREBASE_APP_ID', quoted(envOrProp('BONI_FIREBASE_APP_ID'))
         buildConfigField 'String', 'FIREBASE_API_KEY', quoted(envOrProp('BONI_FIREBASE_API_KEY'))
