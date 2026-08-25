@@ -1,0 +1,37 @@
+name: Package Bonifaciy Chat V4C Patch Files
+
+on:
+  push:
+    branches: [ "bonifaciy-chat-v4-native-test" ]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify patch files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f mobile-v4/tools/apply_v4b_ui_patch.py
+          test -f mobile-v4/tools/apply_v4c_full_patch.py
+          test -f mobile-v4/tools/apply_v4c_java_lambda_fix.py
+          sha256sum \
+            mobile-v4/tools/apply_v4b_ui_patch.py \
+            mobile-v4/tools/apply_v4c_full_patch.py \
+            mobile-v4/tools/apply_v4c_java_lambda_fix.py \
+            > V4C_PATCH_FILES_SHA256.txt
+          cat V4C_PATCH_FILES_SHA256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BonifaciyChat-V4C-PATCH-FILES
+          path: |
+            mobile-v4/tools/apply_v4b_ui_patch.py
+            mobile-v4/tools/apply_v4c_full_patch.py
+            mobile-v4/tools/apply_v4c_java_lambda_fix.py
+            V4C_PATCH_FILES_SHA256.txt
