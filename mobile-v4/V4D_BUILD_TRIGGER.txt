@@ -1,4 +1,4 @@
 V4D attachment URL resolver validation build.
 No production server changes.
 Workflow base refreshed after V4D CI definition update.
-PR5 synchronized after reopen.
+PR5 isolated validation trigger.
