@@ -1,0 +1,2 @@
+V4E event-driven live chat synchronization validation trigger.
+Server/PROD unchanged.
