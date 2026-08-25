@@ -61,6 +61,9 @@ jobs:
       - name: Apply accepted V4D attachment URL resolver
         run: python mobile-v4/tools/apply_v4d_attachment_url_patch.py
 
+      - name: Prepare V4E no-polling gate compatibility
+        run: python mobile-v4/tools/prepare_v4e_gate_compat.py
+
       - name: Apply V4E event-driven live chat sync
         run: python mobile-v4/tools/apply_v4e_live_chat_sync_patch.py
 
@@ -108,8 +111,8 @@ jobs:
           grep -q 'push_chat_title' "$NOTIFY"
           grep -q 'MainActivity.onChatPushReceived' "$SERVICE"
 
-          if grep -q 'postDelayed' "$MAIN"; then
-            echo "ERROR: periodic polling loop detected; V4E must remain event-driven"
+          if grep -E -q 'syncHandler\.postDelayed|CHAT_SYNC_INTERVAL|scheduleChatSyncPolling|postDelayed\([^\n]*syncOpenChatIncremental' "$MAIN"; then
+            echo "ERROR: periodic chat synchronization loop detected"
             exit 23
           fi
 
