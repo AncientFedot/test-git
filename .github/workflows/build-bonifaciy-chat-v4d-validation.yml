@@ -1,0 +1,115 @@
+name: Validate Bonifaciy Chat V4D Isolated PR
+
+on:
+  pull_request:
+    branches: [ "bonifaciy-chat-v4d-validation-base" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BONI_FIREBASE_APP_ID: "1:376053286880:android:74ed820e06563c3d228d85"
+      BONI_FIREBASE_API_KEY: "AIzaSyBMSdgXvo6VQjKKdK_1iR8jy0f98cOa9AI"
+      BONI_FIREBASE_PROJECT_ID: "bonifaciy-chat"
+      BONI_FIREBASE_SENDER_ID: "376053286880"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Restore persistent Bonifaciy TEST signing identity
+        id: signing-cache
+        uses: actions/cache@v4
+        with:
+          path: mobile-src/bonifaciy-test-debug.keystore
+          key: bonifaciy-chat-test-debug-signing-v2
+      - name: Prepare TEST signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mobile-src mobile-v4
+          KEYSTORE="mobile-src/bonifaciy-test-debug.keystore"
+          if [ ! -f "$KEYSTORE" ]; then echo "ERROR: persistent TEST signing key cache is missing"; exit 11; fi
+          cp "$KEYSTORE" mobile-v4/bonifaciy-test-debug.keystore
+          echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
+      - name: Apply V4B UI
+        run: python mobile-v4/tools/apply_v4b_ui_patch.py
+      - name: Apply V4C attachments and remembered login
+        run: python mobile-v4/tools/apply_v4c_full_patch.py
+      - name: Apply V4C Java fix
+        run: python mobile-v4/tools/apply_v4c_java_lambda_fix.py
+      - name: Apply V4D attachment URL resolver
+        run: python mobile-v4/tools/apply_v4d_attachment_url_patch.py
+      - name: Install API 36 SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: V4D security and behavior gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN="mobile-v4/app/src/main/java/ru/leorix/bonifaciychat/MainActivity.java"
+          MANIFEST="mobile-v4/app/src/main/AndroidManifest.xml"
+          GRADLE="mobile-v4/app/build.gradle"
+          ! grep -R -n -E 'android\.webkit\.WebView|<WebView|addJavascriptInterface|WebViewClient|WebChromeClient' mobile-v4/app/src
+          ! grep -R -n -E 'DIRECTORY_DOWNLOADS|setDestinationInExternal|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE' mobile-v4/app/src
+          grep -q 'android:allowBackup="false"' "$MANIFEST"
+          grep -q 'android:usesCleartextTraffic="false"' "$MANIFEST"
+          grep -q 'targetSdk 36' "$GRADLE"
+          grep -q 'versionCode 23' "$GRADLE"
+          grep -q "versionName '4.0d-native-internal'" "$GRADLE"
+          grep -q 'debuggable false' "$GRADLE"
+          grep -q 'V4Core.SecureStore.put(this, "remember_password_"' "$MAIN"
+          grep -q 'nativeAttachmentPathFromWebUrl' "$MAIN"
+          grep -q '/chat/attachment-files/' "$MAIN"
+          grep -q '/chat/attachments/' "$MAIN"
+          grep -q 'first(item, "url", "download_url", "href")' "$MAIN"
+          grep -q '/api/mobile/v4/chat/attachment/file/' "$MAIN"
+          grep -q '/api/mobile/v4/chat/attachment/message/' "$MAIN"
+          grep -q 'FileProvider.getUriForFile' "$MAIN"
+          grep -q 'V4Core.DownloadResult finalResult = r' "$MAIN"
+          echo "V4D_ALL_GATES=OK"
+      - name: Build V4D
+        working-directory: mobile-v4
+        run: gradle assembleDebug --stacktrace
+      - name: Verify old TEST signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mobile-v4/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/sign.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/sign.txt | sed -n '1p')"
+          DIGEST="${DIGEST^^}"
+          printf 'CERT_SHA256=%s\n' "$DIGEST" > V4D_SIGNING_SHA256.txt
+          test "$DIGEST" = "7294CCBBFDEEAF090F17F4FCC4E0A480A78DF344D166CACF52D87D0EBE4A8203"
+      - name: Package V4D
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp mobile-v4/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST.apk
+          sha256sum BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST.apk | tee V4D_APK_SHA256.txt
+          cat > V4D_SECURITY_GATE.txt <<'EOF'
+          STATUS=INTERNAL_TEST_ONLY
+          WEBVIEW=ABSENT
+          PUBLIC_DOWNLOADS=ABSENT
+          TARGET_SDK=36
+          REMEMBERED_LOGIN=ANDROID_KEYSTORE_AES_GCM
+          ATTACHMENT_WEB_URL_RESOLVER=TRUE
+          FILEPROVIDER_PRIVATE_OPEN=TRUE
+          OLD_TEST_SIGNING_CERT_REQUIRED=TRUE
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST
+          path: |
+            BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST.apk
+            V4D_APK_SHA256.txt
+            V4D_SIGNING_SHA256.txt
+            V4D_SECURITY_GATE.txt
