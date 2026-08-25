@@ -1,4 +1,4 @@
-name: Validate Bonifaciy Chat V4C Native PR
+name: Validate Bonifaciy Chat V4D Native PR
 
 on:
   pull_request:
@@ -52,16 +52,19 @@ jobs:
       - name: Apply accepted V4B UI patch
         run: python mobile-v4/tools/apply_v4b_ui_patch.py
 
-      - name: Apply V4C attachment and remembered-login patch
+      - name: Apply accepted V4C attachments and remembered-login patch
         run: python mobile-v4/tools/apply_v4c_full_patch.py
 
-      - name: Apply V4C Java lambda fix
+      - name: Apply accepted V4C Java lambda fix
         run: python mobile-v4/tools/apply_v4c_java_lambda_fix.py
+
+      - name: Apply V4D attachment URL resolver
+        run: python mobile-v4/tools/apply_v4d_attachment_url_patch.py
 
       - name: Install API 36 SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Audit gate - V4C native security and behavior
+      - name: Audit gate - V4D native security and attachment routing
         shell: bash
         run: |
           set -euo pipefail
@@ -81,58 +84,59 @@ jobs:
           grep -q 'android:allowBackup="false"' "$MANIFEST"
           grep -q 'android:usesCleartextTraffic="false"' "$MANIFEST"
           grep -q 'targetSdk 36' "$GRADLE"
-          grep -q 'versionCode 22' "$GRADLE"
-          grep -q "versionName '4.0c-native-internal'" "$GRADLE"
+          grep -q 'versionCode 23' "$GRADLE"
+          grep -q "versionName '4.0d-native-internal'" "$GRADLE"
           grep -q 'debuggable false' "$GRADLE"
 
           grep -q 'V4Core.SecureStore.put(this, "remember_password_"' "$MAIN"
           grep -q 'V4Core.SecureStore.get(this, "remember_password_"' "$MAIN"
           grep -q 'Запомнить меня на этом телефоне' "$MAIN"
           grep -q 'Забыть сохранённые данные' "$MAIN"
-          grep -q 'clearRememberedCredentials(V4Core.RK)' "$MAIN"
-          grep -q 'clearRememberedCredentials(V4Core.BOREY)' "$MAIN"
 
+          grep -q 'nativeAttachmentPathFromWebUrl' "$MAIN"
+          grep -q '/chat/attachment-files/' "$MAIN"
+          grep -q '/chat/attachments/' "$MAIN"
           grep -q '/api/mobile/v4/chat/attachment/file/' "$MAIN"
           grep -q '/api/mobile/v4/chat/attachment/message/' "$MAIN"
+          grep -q 'first(item, "url", "download_url", "href")' "$MAIN"
           grep -q 'attachmentFallbackAllowed' "$MAIN"
-          grep -q 'MimeTypeMap.getSingleton().getMimeTypeFromExtension' "$MAIN"
           grep -q 'FileProvider.getUriForFile' "$MAIN"
-          grep -q 'ClipData.newRawUri' "$MAIN"
-          grep -q 'messageText.startsWith("Файлы:")' "$MAIN"
+          grep -q 'MimeTypeMap.getSingleton().getMimeTypeFromExtension' "$MAIN"
           grep -q 'V4Core.DownloadResult finalResult = r' "$MAIN"
 
-          echo "V4C_NATIVE_ONLY_GATE=OK"
-          echo "V4C_ENCRYPTED_REMEMBERED_LOGIN_GATE=OK"
-          echo "V4C_ATTACHMENT_FALLBACK_GATE=OK"
-          echo "V4C_PRIVATE_STORAGE_GATE=OK"
-          echo "V4C_API36_GATE=OK"
-          echo "V4C_JAVA_LAMBDA_GATE=OK"
+          echo "V4D_NATIVE_ONLY_GATE=OK"
+          echo "V4D_WEB_ATTACHMENT_URL_RESOLVER_GATE=OK"
+          echo "V4D_MULTI_ATTACHMENT_FILE_ID_GATE=OK"
+          echo "V4D_LEGACY_MESSAGE_ATTACHMENT_GATE=OK"
+          echo "V4D_ENCRYPTED_REMEMBERED_LOGIN_GATE=OK"
+          echo "V4D_PRIVATE_STORAGE_GATE=OK"
+          echo "V4D_API36_GATE=OK"
 
-      - name: Build V4C debug APK
+      - name: Build V4D debug APK
         working-directory: mobile-v4
         run: gradle assembleDebug --stacktrace
 
-      - name: Verify V4C APK signature is compatible with existing V4B
+      - name: Verify V4D APK signature is compatible with V4B/V4C
         shell: bash
         run: |
           set -euo pipefail
           APK="mobile-v4/app/build/outputs/apk/debug/app-debug.apk"
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v4c-sign.txt
-          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v4c-sign.txt | sed -n '1p')"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v4d-sign.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v4d-sign.txt | sed -n '1p')"
           test -n "$DIGEST"
           DIGEST="${DIGEST^^}"
-          printf 'CERT_SHA256=%s\n' "$DIGEST" > V4C_SIGNING_SHA256.txt
+          printf 'CERT_SHA256=%s\n' "$DIGEST" > V4D_SIGNING_SHA256.txt
           test "$DIGEST" = "7294CCBBFDEEAF090F17F4FCC4E0A480A78DF344D166CACF52D87D0EBE4A8203"
-          cat V4C_SIGNING_SHA256.txt
+          cat V4D_SIGNING_SHA256.txt
 
-      - name: Package V4C artifact
+      - name: Package V4D artifact
         shell: bash
         run: |
           set -euo pipefail
-          cp mobile-v4/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V4C-NATIVE-ATTACHMENTS-REMEMBER-INTERNAL-TEST.apk
-          sha256sum BonifaciyChat-V4C-NATIVE-ATTACHMENTS-REMEMBER-INTERNAL-TEST.apk | tee V4C_APK_SHA256.txt
-          cat > V4C_SECURITY_GATE.txt <<'EOF'
+          cp mobile-v4/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST.apk
+          sha256sum BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST.apk | tee V4D_APK_SHA256.txt
+          cat > V4D_SECURITY_GATE.txt <<'EOF'
           STATUS=INTERNAL_TEST_ONLY
           WEBVIEW=ABSENT_BY_CI_GATE
           PUBLIC_DOWNLOADS=ABSENT_BY_CI_GATE
@@ -140,21 +144,20 @@ jobs:
           CLEAR_TEXT=FALSE
           TARGET_SDK=36
           REMEMBERED_LOGIN=ANDROID_KEYSTORE_AES_GCM
-          PLAIN_PASSWORD_PREFERENCES=NOT_USED
-          EXPLICIT_LOGOUT_CLEARS_REMEMBERED_CREDENTIALS=TRUE
-          ATTACHMENT_FILE_ID_PRIMARY=TRUE
+          ATTACHMENT_WEB_URL_RESOLVER=TRUE
+          ATTACHMENT_FILES_URL_TO_NATIVE_FILE_ENDPOINT=TRUE
+          ATTACHMENTS_URL_TO_NATIVE_MESSAGE_ENDPOINT=TRUE
           ATTACHMENT_MESSAGE_ID_FALLBACK=TRUE
-          LEGACY_FILES_TEXT_FALLBACK=TRUE
           FILEPROVIDER_PRIVATE_OPEN=TRUE
           MIME_INFERENCE=TRUE
-          V4B_SIGNING_COMPATIBLE=TRUE
+          V4B_V4C_SIGNING_COMPATIBLE=TRUE
           EOF
 
       - uses: actions/upload-artifact@v4
         with:
-          name: BonifaciyChat-V4C-NATIVE-ATTACHMENTS-REMEMBER-INTERNAL-TEST
+          name: BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST
           path: |
-            BonifaciyChat-V4C-NATIVE-ATTACHMENTS-REMEMBER-INTERNAL-TEST.apk
-            V4C_APK_SHA256.txt
-            V4C_SIGNING_SHA256.txt
-            V4C_SECURITY_GATE.txt
+            BonifaciyChat-V4D-NATIVE-ATTACHMENT-URL-FIX-INTERNAL-TEST.apk
+            V4D_APK_SHA256.txt
+            V4D_SIGNING_SHA256.txt
+            V4D_SECURITY_GATE.txt
