@@ -55,30 +55,8 @@ jobs:
       - name: Apply V4C attachment and remembered-login patch
         run: python mobile-v4/tools/apply_v4c_full_patch.py
 
-      - name: Fix V4C Java lambda capture
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('mobile-v4/app/src/main/java/ru/leorix/bonifaciychat/MainActivity.java')
-          s = p.read_text(encoding='utf-8')
-          old = '''                String finalUsedPath = usedPath;
-                runOnUiThread(() -> {
-                    loading(false);
-                    openDownloadedFile(r, name);
-'''
-          new = '''                String finalUsedPath = usedPath;
-                V4Core.DownloadResult finalResult = r;
-                runOnUiThread(() -> {
-                    loading(false);
-                    openDownloadedFile(finalResult, name);
-'''
-          if s.count(old) != 1:
-              raise SystemExit(f'lambda fix anchor expected 1, found {s.count(old)}')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
-          print('V4C_LAMBDA_FIX=OK')
-          PY
+      - name: Apply V4C Java lambda fix
+        run: python mobile-v4/tools/apply_v4c_java_lambda_fix.py
 
       - name: Install API 36 SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
