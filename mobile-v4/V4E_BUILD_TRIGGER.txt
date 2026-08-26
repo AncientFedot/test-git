@@ -1,0 +1,3 @@
+V4E event-driven live chat synchronization validation trigger.
+Server/PROD unchanged.
+Retry after targeted no-periodic-sync gate fix.

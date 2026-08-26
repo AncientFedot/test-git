@@ -1,0 +1,168 @@
+name: Build Bonifaciy Chat V4 Native
+
+on:
+  push:
+    branches: [ "bonifaciy-chat-v4-native-test" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bonifaciy-chat-v4-native-test
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BONI_FIREBASE_APP_ID: "1:376053286880:android:74ed820e06563c3d228d85"
+      BONI_FIREBASE_API_KEY: "AIzaSyBMSdgXvo6VQjKKdK_1iR8jy0f98cOa9AI"
+      BONI_FIREBASE_PROJECT_ID: "bonifaciy-chat"
+      BONI_FIREBASE_SENDER_ID: "376053286880"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Restore persistent Bonifaciy TEST signing identity
+        id: signing-cache
+        uses: actions/cache@v4
+        with:
+          path: mobile-src/bonifaciy-test-debug.keystore
+          key: bonifaciy-chat-test-debug-signing-v2
+
+      - name: Prepare TEST signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mobile-src mobile-v4
+          KEYSTORE="mobile-src/bonifaciy-test-debug.keystore"
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair \
+              -keystore "$KEYSTORE" \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Bonifaciy Chat TEST,O=LEORIX,C=RU" \
+              -noprompt
+          fi
+          cp "$KEYSTORE" mobile-v4/bonifaciy-test-debug.keystore
+          echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
+
+      - name: Apply deterministic V4B UI patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python mobile-v4/tools/apply_v4b_ui_patch.py
+
+      - name: Install API 36 SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Audit gate - native only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'android\.webkit\.WebView|<WebView|addJavascriptInterface|WebViewClient|WebChromeClient' mobile-v4/app/src; then
+            echo "ERROR: WebView surface detected in V4"
+            exit 21
+          fi
+          grep -q 'android:allowBackup="false"' mobile-v4/app/src/main/AndroidManifest.xml
+          grep -q 'android:usesCleartextTraffic="false"' mobile-v4/app/src/main/AndroidManifest.xml
+          grep -q 'targetSdk 36' mobile-v4/app/build.gradle
+          grep -q 'versionCode 21' mobile-v4/app/build.gradle
+          grep -q "versionName '4.0b-native-internal'" mobile-v4/app/build.gradle
+          grep -q 'release {' mobile-v4/app/build.gradle
+          grep -q 'debuggable false' mobile-v4/app/build.gradle
+          grep -q 'JSONObject author = m.optJSONObject("author")' mobile-v4/app/src/main/java/ru/leorix/bonifaciychat/MainActivity.java
+          grep -q 'boolean own = m.optBoolean("is_own", false)' mobile-v4/app/src/main/java/ru/leorix/bonifaciychat/MainActivity.java
+          grep -q 'scroll.fullScroll(View.FOCUS_DOWN)' mobile-v4/app/src/main/java/ru/leorix/bonifaciychat/MainActivity.java
+          if grep -R -n -E 'DIRECTORY_DOWNLOADS|setDestinationInExternal|WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE' mobile-v4/app/src; then
+            echo "ERROR: public/external storage use detected in V4"
+            exit 22
+          fi
+          echo "V4_NATIVE_ONLY_GATE=OK"
+          echo "PRIVATE_STORAGE_GATE=OK"
+          echo "API36_GATE=OK"
+          echo "V4B_MESSAGE_RENDER_GATE=OK"
+
+      - name: Build V4B debug APK
+        working-directory: mobile-v4
+        run: gradle assembleDebug
+
+      - name: Verify APK signature and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mobile-v4/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v4b-sign.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v4b-sign.txt | sed -n '1p')"
+          test -n "$DIGEST"
+          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V4B_SIGNING_SHA256.txt
+          cat V4B_SIGNING_SHA256.txt
+          test "${DIGEST^^}" = "7294CCBBFDEEAF090F17F4FCC4E0A480A78DF344D166CACF52D87D0EBE4A8203"
+
+      - name: Package V4B artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp mobile-v4/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V4B-NATIVE-UI-SCROLL-INTERNAL-TEST.apk
+          sha256sum BonifaciyChat-V4B-NATIVE-UI-SCROLL-INTERNAL-TEST.apk | tee V4B_APK_SHA256.txt
+          cat > V4B_SECURITY_GATE.txt <<'EOF'
+          STATUS=INTERNAL_TEST_ONLY
+          WEBVIEW=ABSENT_BY_CI_GATE
+          JAVASCRIPT_BRIDGE=ABSENT_BY_CI_GATE
+          PUBLIC_DOWNLOADS=ABSENT_BY_CI_GATE
+          ALLOW_BACKUP=FALSE
+          CLEAR_TEXT=FALSE
+          TARGET_SDK=36
+          RELEASE_DEBUGGABLE=FALSE
+          MESSAGE_AUTHOR_OBJECT_PARSED=TRUE
+          OWN_MESSAGE_BUBBLES=TRUE
+          BOTTOM_SCROLL_AFTER_LAYOUT=TRUE
+          TEST_FIREBASE_SEPARATION=PENDING_RELEASE_GATE
+          PRODUCTION_SIGNING_KEY=PENDING_RELEASE_GATE
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BonifaciyChat-V4B-NATIVE-UI-SCROLL-INTERNAL-TEST
+          path: |
+            BonifaciyChat-V4B-NATIVE-UI-SCROLL-INTERNAL-TEST.apk
+            V4B_APK_SHA256.txt
+            V4B_SIGNING_SHA256.txt
+            V4B_SECURITY_GATE.txt
+
+      - name: Publish V4B build metadata
+        if: github.ref == 'refs/heads/bonifaciy-chat-v4-native-test'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "RUN_ID=${GITHUB_RUN_ID}"
+            echo "HEAD_SHA=${GITHUB_SHA}"
+            echo "STATE=SUCCESS"
+            echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
+            cat V4B_SIGNING_SHA256.txt
+            cat V4B_APK_SHA256.txt
+          } > mobile-v4/V4B_BUILD_META.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile-v4/V4B_BUILD_META.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "V4B build metadata [skip ci]"
+            git push origin HEAD:bonifaciy-chat-v4-native-test
+          fi

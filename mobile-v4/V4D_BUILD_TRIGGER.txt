@@ -1,0 +1,7 @@
+V4D attachment URL resolver validation build.
+No production server changes.
+Workflow base refreshed after V4D CI definition update.
+PR5 synchronized after reopen.
+Final isolated validation trigger after branch filter fix.
+Returning PR5 to original signing-cache scope for final V4D build.
+Retarget event pending.

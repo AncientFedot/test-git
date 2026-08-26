@@ -1,0 +1,6 @@
+V4C_COMPILE_FIX_REVISION=1
+PURPOSE=Trigger and document the Java lambda capture fix used by the V4C PR build.
+FIX=Capture DownloadResult into finalResult before runOnUiThread lambda.
+EXPECTED_VERSION_CODE=22
+EXPECTED_VERSION_NAME=4.0c-native-internal
+EXPECTED_TEST_CERT_SHA256=7294CCBBFDEEAF090F17F4FCC4E0A480A78DF344D166CACF52D87D0EBE4A8203
