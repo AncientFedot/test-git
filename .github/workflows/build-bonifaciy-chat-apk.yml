@@ -1,0 +1,161 @@
+name: Build Bonifaciy Chat APK
+
+on:
+  push:
+    branches: [ "bonifaciy-chat-apk-build-v1", "bonifaciy-chat-apk-v2-test", "bonifaciy-chat-apk-v3-push-test" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BONI_FIREBASE_APP_ID: "1:376053286880:android:74ed820e06563c3d228d85"
+      BONI_FIREBASE_API_KEY: "AIzaSyBMSdgXvo6VQjKKdK_1iR8jy0f98cOa9AI"
+      BONI_FIREBASE_PROJECT_ID: "bonifaciy-chat"
+      BONI_FIREBASE_SENDER_ID: "376053286880"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish V3H run locator
+        if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "RUN_ID=${GITHUB_RUN_ID}"
+            echo "HEAD_SHA=${GITHUB_SHA}"
+            echo "STATE=STARTED"
+          } > mobile-src/V3H_RUN_LOCATOR.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile-src/V3H_RUN_LOCATOR.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "V3H run locator [skip ci]"
+            git push origin HEAD:bonifaciy-chat-apk-v3-push-test
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Restore persistent Bonifaciy TEST signing key
+        id: signing-cache
+        uses: actions/cache@v4
+        with:
+          path: mobile-src/bonifaciy-test-debug.keystore
+          key: bonifaciy-chat-test-debug-signing-v2
+
+      - name: Create TEST signing key on first build
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="mobile-src/bonifaciy-test-debug.keystore"
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair \
+              -keystore "$KEYSTORE" \
+              -storepass android \
+              -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Bonifaciy Chat TEST,O=LEORIX,C=RU" \
+              -noprompt
+          fi
+          test -s "$KEYSTORE"
+          echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Apply V3C mobile UI and native diagnostics base
+        working-directory: mobile-src
+        run: python patch_v3_source.py
+
+      - name: Apply V3E push protocol compatibility fix
+        working-directory: mobile-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/ru/leorix/bonifaciychat/PushRegistrar.java')
+          s = p.read_text(encoding='utf-8')
+          count = s.count('"android-v3c"')
+          if count != 2:
+              raise SystemExit(f'Expected exactly 2 android-v3c protocol headers, found {count}')
+          s = s.replace('"android-v3c"', '"android-v3"')
+          s = s.replace('BonifaciyChatAndroid/3.2', 'BonifaciyChatAndroid/3.4')
+          s = s.replace('V3C native diagnostics', 'V3E native diagnostics')
+          s = s.replace('return "3.2-test";', 'return "3.4-test";')
+          p.write_text(s, encoding='utf-8')
+          print('V3E protocol fix OK: X-Bonifaciy-Mobile-App=android-v3')
+          PY
+
+      - name: Apply V3F POST security headers and diagnostics
+        working-directory: mobile-src
+        run: python patch_v3f_push_post_headers.py
+
+      - name: Apply V3G exact chat navigation and mobile shell
+        working-directory: mobile-src
+        run: python patch_v3g_chat_navigation_shell.py
+
+      - name: Fix V3G Java regex escape
+        working-directory: mobile-src
+        run: python patch_v3g_compile_escape_fix.py
+
+      - name: Apply V3H chat-only navigation guard
+        working-directory: mobile-src
+        run: python patch_v3h_chat_only_navigation_guard.py
+
+      - name: Build debug APK with persistent TEST signing identity
+        working-directory: mobile-src
+        run: gradle assembleDebug
+
+      - name: Verify APK and record TEST signing fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mobile-src/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > /tmp/v3h-apksigner.txt
+          DIGEST="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/v3h-apksigner.txt | sed -n '1p')"
+          test -n "$DIGEST"
+          printf 'CERT_SHA256=%s\n' "${DIGEST^^}" > V3H_SIGNING_SHA256.txt
+          cat V3H_SIGNING_SHA256.txt
+
+      - name: Rename APK
+        run: cp mobile-src/app/build/outputs/apk/debug/app-debug.apk BonifaciyChat-V3H-CHAT-GUARD-PUSH-TEST.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BonifaciyChat-V3H-CHAT-GUARD-PUSH-TEST
+          path: |
+            BonifaciyChat-V3H-CHAT-GUARD-PUSH-TEST.apk
+            V3H_SIGNING_SHA256.txt
+
+      - name: Publish non-secret V3H build metadata
+        if: github.ref == 'refs/heads/bonifaciy-chat-apk-v3-push-test'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "RUN_ID=${GITHUB_RUN_ID}"
+            echo "HEAD_SHA=${GITHUB_SHA}"
+            echo "STATE=SUCCESS"
+            echo "SIGNING_CACHE_HIT=${{ steps.signing-cache.outputs.cache-hit }}"
+            cat V3H_SIGNING_SHA256.txt
+          } > mobile-src/V3H_BUILD_META.txt
+          git add mobile-src/V3H_BUILD_META.txt mobile-src/V3H_RUN_LOCATOR.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "V3H build metadata [skip ci]"
+            git push origin HEAD:bonifaciy-chat-apk-v3-push-test
+          fi
